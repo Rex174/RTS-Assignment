@@ -195,4 +195,5 @@ Deterministic memory management with no garbage collector pauses, compile-time d
 ## Ramaneiss 
 
 **Student A — Satellite Onboard Control System (OCS)**
-CT087-3-3 Real-Time Systems, Asia Pacific University
+
+CT087-3-3 Real-Time Systems (Asia Pacific University)
