@@ -1,8 +1,8 @@
 # RTS Assignment — Satellite Onboard Control System (OCS)
 
-**Module:** CT087-3-3 Real-Time Systems
-**Institution:** Asia Pacific University of Technology & Innovation (APU)
-**Language:** Rust (edition 2021)
+**Module:** CT087-3-3 Real-Time Systems ||
+**Institution:** Asia Pacific University of Technology & Innovation (APU) ||
+**Language:** Rust (edition 2021) ||
 **Role:** Student A — Satellite Onboard Control System (OCS)
 
 ---
