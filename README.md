@@ -179,12 +179,15 @@ Two log files are generated in the project root after each run:
 ## Design Notes
 
 **Why UDP and not TCP for telemetry?**
+
 TCP's retransmission and head-of-line blocking introduce unpredictable latency spikes. In a hard real-time system, a retransmitted packet arriving hundreds of milliseconds late is operationally worthless. UDP's fire-and-forget model matches the requirement, and packet loss is detected at the application layer through sequence number gaps.
 
 **Why a hybrid sleep + spin-wait for the Thermal sensor?**
+
 Windows `thread::sleep` has approximately 1ms timer granularity, which alone makes the sub-1ms jitter requirement unachievable. The Thermal thread sleeps until 1.5ms before its scheduled release, then spin-waits with `std::hint::spin_loop()` for the remainder, achieving sub-200µs precision at the cost of a small amount of CPU.
 
 **Why Rust?**
+
 Deterministic memory management with no garbage collector pauses, compile-time data race prevention through the ownership model, and zero-cost abstractions — all prerequisites for a system where timing analysis must hold.
 
 ---
