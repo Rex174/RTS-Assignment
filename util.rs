@@ -1,23 +1,22 @@
-
 use std::time::{Duration, Instant};
 use std::sync::atomic::{AtomicBool, Ordering};
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // Core data types
-// ─────────────────────────────────────────────────────────────────────────────
+
 
 #[derive(Clone, Debug)]
 pub struct SensorData {
     pub name:      &'static str,
     pub timestamp: Instant,
     pub value:     f64,
-    /// 0 = highest priority. Thermal=0, Power=1, Payload=2.
+    // 0 = highest priority (Thermal=0, Power=1, Payload=2)
     pub priority:  u8,
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // Online statistics — mean, max, σ without storing all samples
-// ─────────────────────────────────────────────────────────────────────────────
+
 
 #[derive(Default, Clone)]
 pub struct RunningStats {
@@ -50,9 +49,9 @@ impl RunningStats {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // Per-sensor aggregated performance data
-// ─────────────────────────────────────────────────────────────────────────────
+
 
 #[derive(Default, Clone)]
 pub struct SensorPerfStats {
@@ -63,9 +62,8 @@ pub struct SensorPerfStats {
     pub dropped: u64,
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // Fault record — one entry per injected fault
-// ─────────────────────────────────────────────────────────────────────────────
 
 #[derive(Clone)]
 pub struct FaultRecord {
@@ -76,9 +74,9 @@ pub struct FaultRecord {
     pub passed:      bool,
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // Global aggregates used by MetricsLogger
-// ─────────────────────────────────────────────────────────────────────────────
+
 
 #[derive(Default)]
 pub struct Aggregates {
@@ -111,11 +109,16 @@ pub struct Aggregates {
 
     // Fault history (one entry per injected fault)
     pub fault_records: Vec<FaultRecord>,
+
+    pub downlink_queue_latency: RunningStats,  // time from sensor read to downlink TX
+    pub downlink_windows_met:    u64,
+    pub downlink_windows_missed: u64,
+    pub downlink_packets_sent:   u64,
+    pub degraded_mode_entries:   u64,
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // Shared shutdown flag — set by main(), checked by all worker threads
-// ─────────────────────────────────────────────────────────────────────────────
 
 pub struct ShutdownFlag(AtomicBool);
 
@@ -124,12 +127,12 @@ impl ShutdownFlag {
         Self(AtomicBool::new(false))
     }
 
-    /// Called once by main() when the simulation time is up.
+    // Called once by main() when the simulation time is up.
     pub fn signal(&self) {
         self.0.store(true, Ordering::SeqCst);
     }
 
-    /// Called at the top of every worker loop iteration.
+    // Called at the top of every worker loop iteration.
     pub fn is_set(&self) -> bool {
         self.0.load(Ordering::SeqCst)
     }

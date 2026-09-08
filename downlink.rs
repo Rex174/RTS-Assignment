@@ -7,16 +7,14 @@ use std::{
 use flate2::{write::GzEncoder, Compression};
 use crate::{
     buffer::BoundedBuffer,
+    fault::FaultFlags,
     metrics::MetricsLogger,
     network::{OcsTelemetryPacket, UdpSender,
               SENSOR_THERMAL, SENSOR_POWER, SENSOR_PAYLOAD,
               FLAG_DEGRADED, FLAG_SAFETY_ALERT, FLAG_NAN},
+    uplink::RecentPacketStore,
     util::{SensorData, ShutdownFlag},
 };
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Internal packet representation (gzip compression step)
-// ─────────────────────────────────────────────────────────────────────────────
 
 struct TelemetryPacket {
     sensor_name:     &'static str,
@@ -54,20 +52,17 @@ fn compress_and_packetize(data: &SensorData, seq: u32) -> TelemetryPacket {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Downlink thread — drains buffer every 100ms, sends UDP to GCS
-// ─────────────────────────────────────────────────────────────────────────────
-
 pub fn start_downlink(
     buffer:        Arc<BoundedBuffer>,
     metrics:       Arc<MetricsLogger>,
     shutdown:      Arc<ShutdownFlag>,
-    ocs_bind_addr: &str,   // e.g. "0.0.0.0:9001"
-    gcs_udp_addr:  &str,   // e.g. "127.0.0.1:9002"
+    faults:        Arc<FaultFlags>,
+    recent_packets: Arc<RecentPacketStore>,
+    ocs_bind_addr: &str,
+    gcs_udp_addr:  &str,
 ) {
     metrics.downlink_loop_start();
 
-    // Create the UDP sender — bind once, reuse for every packet
     let sender = match UdpSender::new(ocs_bind_addr, gcs_udp_addr) {
         Ok(s)  => Arc::new(s),
         Err(e) => {
@@ -82,12 +77,10 @@ pub fn start_downlink(
         let mut total_sent: u64  = 0;
 
         loop {
-            // ── Shutdown check ────────────────────────────────────────────
             if shutdown.is_set() {
                 break;
             }
 
-            // ── 5ms init deadline timer (starts before any work) ─────────
             let loop_start  = Instant::now();
             let fill        = buffer.fill_ratio();
             let init_lat_ms = loop_start.elapsed().as_secs_f64() * 1000.0;
@@ -95,41 +88,43 @@ pub fn start_downlink(
                 metrics.downlink_miss("INIT_DEADLINE", init_lat_ms - 5.0);
             }
 
-            // ── Degraded mode gate ────────────────────────────────────────
+            let safe_mode_active = faults.manual_safe_mode.load(std::sync::atomic::Ordering::SeqCst);
+
             if fill > 0.8 && !degraded {
                 degraded = true;
+                metrics.downlink_degraded_entry();
                 metrics.downlink_status(fill * 100.0, total_sent, true);
             } else if fill <= 0.8 && degraded {
                 degraded = false;
             }
 
             metrics.downlink_visibility();
-            metrics.downlink_status(fill * 100.0, total_sent, degraded);
+            metrics.downlink_status(fill * 100.0, total_sent, degraded || safe_mode_active);
 
-            // Build flags byte from current system state
             let safety_active = {
                 let agg = metrics.agg.lock().unwrap();
                 agg.safety_alerts > 0
-            };
-            let base_flags: u8 =
-                if degraded       { FLAG_DEGRADED }      else { 0 } |
-                    if safety_active  { FLAG_SAFETY_ALERT }  else { 0 };
+            } || faults.any_fault_active();
 
-            // ── Drain buffer within 30ms visibility window ────────────────
+            let base_flags: u8 =
+                if degraded || safe_mode_active { FLAG_DEGRADED } else { 0 } |
+                if safety_active { FLAG_SAFETY_ALERT } else { 0 };
+
             let window_start = Instant::now();
             let mut pkts: Vec<TelemetryPacket> = Vec::new();
 
             while let Some(data) = buffer.pop() {
+                let queue_lat_ms = data.timestamp.elapsed().as_secs_f64() * 1000.0;
+                metrics.downlink_queue_lat(queue_lat_ms);
+
                 let pkt = compress_and_packetize(&data, sequence);
                 let tx_start = Instant::now();
 
-                // Determine per-packet flags
                 let mut flags = base_flags;
                 if data.value.is_nan() {
                     flags |= FLAG_NAN;
                 }
 
-                // ── Send over UDP to GCS ──────────────────────────────────
                 let udp_pkt = OcsTelemetryPacket {
                     sequence:     pkt.sequence,
                     timestamp_us: sender.elapsed_us(),
@@ -138,7 +133,9 @@ pub fn start_downlink(
                     orig_size:    pkt.original_size as u16,
                     flags,
                 };
+
                 sender.send(&udp_pkt);
+                recent_packets.insert(udp_pkt.clone());
 
                 metrics.downlink_tx(
                     pkt.sequence,
@@ -147,6 +144,9 @@ pub fn start_downlink(
                     pkt.compressed_size,
                     tx_start.elapsed().as_secs_f64() * 1000.0,
                 );
+
+                metrics.downlink_packet_sent();
+
                 sequence    = sequence.wrapping_add(1);
                 total_sent += 1;
                 pkts.push(pkt);
@@ -156,12 +156,13 @@ pub fn start_downlink(
             if !pkts.is_empty() {
                 if elapsed_ms > 30.0 {
                     metrics.downlink_miss("30ms-window", elapsed_ms - 30.0);
+                    metrics.downlink_window_missed();
                 } else {
                     metrics.downlink_window_result(pkts.len(), elapsed_ms, total_sent);
+                    metrics.downlink_window_met();
                 }
             }
 
-            // ── Wait for next 100ms cycle (interruptible by shutdown) ─────
             let mut remaining = Duration::from_millis(100);
             while remaining > Duration::ZERO && !shutdown.is_set() {
                 let step = remaining.min(Duration::from_millis(10));

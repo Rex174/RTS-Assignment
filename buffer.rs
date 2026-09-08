@@ -2,16 +2,16 @@ use std::collections::VecDeque;
 use std::sync::Mutex;
 use crate::util::SensorData;
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // Priority-aware bounded buffer
-// ─────────────────────────────────────────────────────────────────────────────
+
 
 pub enum PushResult {
-    /// Incoming item accepted — there was space available.
+    // Incoming item accepted — there was space available.
     Accepted,
-    /// Incoming accepted, but a lower-priority item was evicted to make room.
+    // Incoming accepted, but a lower-priority item was evicted to make room.
     Evicted(SensorData),
-    /// Incoming rejected — it was the lowest priority item present.
+    // Incoming rejected — it was the lowest priority item present.
     Dropped(SensorData),
 }
 

@@ -4,9 +4,9 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use crate::util::{Aggregates, FaultRecord};
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MetricsLogger — central logging, statistics, and file output
-// ─────────────────────────────────────────────────────────────────────────────
+
+// MetricsLogger (central logging, statistics and file output)
+
 
 pub struct MetricsLogger {
     pub start:  Instant,
@@ -29,7 +29,7 @@ impl MetricsLogger {
         }
     }
 
-    // ── Private helpers ───────────────────────────────────────────────────
+    // ── Private helpers
 
     fn plog(&self, line: &str) {
         if let Ok(mut f) = OpenOptions::new().append(true).open(&self.perf_path) {
@@ -43,7 +43,7 @@ impl MetricsLogger {
         }
     }
 
-    // ── Sensor events ─────────────────────────────────────────────────────
+    // ── Sensor events
 
     pub fn sensor_init(&self, name: &str, period_ms: u64, priority: u8) {
         let s = format!(
@@ -103,7 +103,7 @@ impl MetricsLogger {
         }
     }
 
-    /// Update per-sensor drift/jitter/latency stats and increment cycle count.
+    // Update per-sensor drift/jitter/latency stats and increment cycle count.
     pub fn update_sensor_stats(
         &self, name: &str, drift_us: f64, jitter_us: Option<f64>, lat_us: f64,
     ) {
@@ -135,7 +135,7 @@ impl MetricsLogger {
         self.agg.lock().unwrap().safety_alerts += 1;
     }
 
-    // ── Scheduler events ──────────────────────────────────────────────────
+    // ── Scheduler events
 
     pub fn sched_init(
         &self, name: &str, period_ms: u64, wcet_ms: u64, priority: u8,
@@ -187,7 +187,7 @@ impl MetricsLogger {
         a.cpu_total_ns  += period_ns;
     }
 
-    // ── Downlink events ───────────────────────────────────────────────────
+    // ── Downlink events
 
     pub fn downlink_loop_start(&self) {
         let s = "[DOWNLINK][LOOP] Starting downlink loop (drain every 100ms)";
@@ -232,7 +232,7 @@ impl MetricsLogger {
         self.agg.lock().unwrap().deadline_misses += 1;
     }
 
-    /// Packet-level TX log — written to file only (too noisy for stdout).
+    // Packet-level TX log (Written to file only)
     pub fn downlink_tx(
         &self, seq: u32, sensor: &str, orig: usize, comp: usize, tx_ms: f64,
     ) {
@@ -243,7 +243,7 @@ impl MetricsLogger {
         self.plog(&s);
     }
 
-    // ── Fault / benchmark events ──────────────────────────────────────────
+    // ── Fault / benchmark events
 
     pub fn bench_init(&self) {
         let s = "[BENCH][INIT] Fault injector ready \
@@ -263,6 +263,26 @@ impl MetricsLogger {
         self.plog(&s);
         self.flog(&s);
         self.agg.lock().unwrap().fault_injections += 1;
+    }
+
+    pub fn downlink_queue_lat(&self, lat_ms: f64) {
+        self.agg.lock().unwrap().downlink_queue_latency.push(lat_ms);
+    }
+
+    pub fn downlink_window_met(&self) {
+        self.agg.lock().unwrap().downlink_windows_met += 1;
+    }
+
+    pub fn downlink_window_missed(&self) {
+        self.agg.lock().unwrap().downlink_windows_missed += 1;
+    }
+
+    pub fn downlink_packet_sent(&self) {
+        self.agg.lock().unwrap().downlink_packets_sent += 1;
+    }
+
+    pub fn downlink_degraded_entry(&self) {
+        self.agg.lock().unwrap().degraded_mode_entries += 1;
     }
 
     pub fn fault_recovery(
@@ -293,7 +313,7 @@ impl MetricsLogger {
         a.fault_records.push(rec);
     }
 
-    // ── Final report ──────────────────────────────────────────────────────
+    // ── Final report
 
     pub fn final_report(&self, gcs_tcp: &str, gcs_udp: &str) {
         let a        = self.agg.lock().unwrap();
@@ -342,7 +362,7 @@ impl MetricsLogger {
             report.push('\n');
         };
 
-        // ─── TASK 1 & 2 ───────────────────────────────────────────────────
+        // ─── TASK 1 & 2 Structure
         line("┌────────────────────────────────────────────────────────────┐");
         line("│         TASK 1 & 2  —  SENSOR / SCHEDULER REPORT          │");
         line("└────────────────────────────────────────────────────────────┘");
@@ -398,22 +418,40 @@ impl MetricsLogger {
         line(&format!("Idle                 : {:.2}%", 100.0 - cpu_pct));
         line("");
 
-        // ─── TASK 3 ───────────────────────────────────────────────────────
+        // ─── TASK 3 Structure
         line("┌────────────────────────────────────────────────────────────┐");
         line("│              TASK 3  —  DOWNLINK METRICS REPORT            │");
         line("└────────────────────────────────────────────────────────────┘");
         line("Protocol        : UDP (alerts/status)");
-        line(&format!("TCP address      : {}", gcs_tcp));
+        line(&format!("TCP address      : {} (Reserved for GCS command uplink)", gcs_tcp));
         line(&format!("UDP address      : {}", gcs_udp));
-        line("GCS connected   : ✓ Simulated");
+        line("GCS connected   : ✓ ");
         line("Visibility rule : data within 30ms of window open");
         line("Degraded thresh : 80% buffer fill");
+        line(&format!("Total packets sent  : {}", a.downlink_packets_sent));
+        line(&format!("Queue latency (avg) : {:.3}ms  max={:.3}ms",
+                      a.downlink_queue_latency.mean(), a.downlink_queue_latency.max));
+        line(&format!("30ms windows met    : {}", a.downlink_windows_met));
+        line(&format!("30ms windows missed : {}", a.downlink_windows_missed));
+        line(&format!("Degraded mode entries: {}", a.degraded_mode_entries));
         line("");
 
-        // ─── TASK 4 ───────────────────────────────────────────────────────
+        // ─── TASK 4 Structure
         line("┌────────────────────────────────────────────────────────────┐");
         line("│         TASK 4  —  BENCHMARKING & FAULT SIMULATION         │");
         line("└────────────────────────────────────────────────────────────┘");
+        line("— Benchmarking Summary ————————————————————————————————————————");
+        line(&format!("Thermal jitter (avg)   : {:.3}ms  (target: <1ms)  {}",
+                      jitter_ms, if jitter_ms < 1.0 { "✓" } else { "✗" }));
+        line(&format!("Scheduling drift (avg) : {:.3}ms  (Thermal max: {:.3}ms)",
+                      a.thermal.drift.mean() / 1000.0, a.thermal.drift.max / 1000.0));
+        line(&format!("Deadline adherence     : {:.1}%  ({} violations / {} jobs)",
+                      dead_adh, a.jobs_violated, a.jobs_total));
+        line(&format!("CPU utilisation        : {:.2}% active / {:.2}% idle",
+                      cpu_pct, 100.0 - cpu_pct));
+        line(&format!("Fault recovery (avg)   : {:.1}ms  (limit: 200ms)  {}",
+                      avg_rec, if avg_rec < 200.0 { "✓" } else { "✗" }));
+        line("");
         line("— Fault Injection Summary ———————————————————————————————————");
         line(&format!("Total faults injected : {}", a.fault_injections));
         line("Recovery deadline     : 200ms");
@@ -461,7 +499,7 @@ impl MetricsLogger {
         line(&format!("Fault log written to: {}", self.fault_path));
         line("─────────────────────────────────────────────────────────────");
 
-        // Write the full report to the performance log file
+        // Write full report to the performance log file (performance_log.txt)
         let _ = std::fs::write(&self.perf_path, &report);
         println!("[LOG] Final report written to {}", self.perf_path);
     }

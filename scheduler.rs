@@ -10,9 +10,9 @@ use crate::{buffer::BoundedBuffer, metrics::MetricsLogger, util::ShutdownFlag};
 
 static RUNNING_PRIORITY: AtomicI32 = AtomicI32::new(-1);
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // Task definition
-// ─────────────────────────────────────────────────────────────────────────────
+
 
 struct Task {
     name:     &'static str,
@@ -21,9 +21,9 @@ struct Task {
     wcet_ms:  u64,
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // RMS scheduler — spawns one thread per task
-// ─────────────────────────────────────────────────────────────────────────────
+
 
 pub fn start_scheduler(
     buffer:   Arc<BoundedBuffer>,
@@ -56,12 +56,12 @@ pub fn start_scheduler(
             let mut job: u64 = 0;
 
             loop {
-                // ── Shutdown check ────────────────────────────────────────
+                // Shutdown check
                 if shutdown.is_set() {
                     break;
                 }
 
-                // ── Sleep until next period boundary ──────────────────────
+                // Sleep until next period boundary
                 let now = Instant::now();
                 if next_release > now {
                     let nap = next_release
@@ -87,7 +87,7 @@ pub fn start_scheduler(
                     );
                 }
 
-                // ── Preemption check ──────────────────────────────────────
+                // Preemption check
                 let running = RUNNING_PRIORITY.load(Ordering::SeqCst);
                 if running != -1 && running < task.priority {
                     metrics.sched_preempt(task.name, "higher-priority task");
@@ -95,7 +95,7 @@ pub fn start_scheduler(
                     continue;
                 }
 
-                // ── Claim the CPU slot ────────────────────────────────────
+                // Claim the CPU slot
                 if RUNNING_PRIORITY
                     .compare_exchange(
                         -1, task.priority, Ordering::SeqCst, Ordering::SeqCst,
@@ -106,7 +106,7 @@ pub fn start_scheduler(
                     continue;
                 }
 
-                // ── Execute task body ─────────────────────────────────────
+                // Execute task body
                 let exec_start = Instant::now();
                 metrics.sched_run(task.name, buffer.fill_ratio() * 100.0);
                 run_task_body(task.name, &buffer, &metrics);
@@ -116,7 +116,7 @@ pub fn start_scheduler(
                 RUNNING_PRIORITY.store(-1, Ordering::SeqCst);
                 metrics.log_cpu(exec_ns, task.period.as_nanos() as u64);
 
-                // FINISH_LATE violation — total elapsed exceeds period
+                // FINISH_LATE violation (Total elapsed exceeds period)
                 let total_us = actual_start.elapsed().as_micros() as f64;
                 let period_us = task.period.as_micros() as f64;
                 if total_us > period_us {
@@ -131,9 +131,9 @@ pub fn start_scheduler(
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Simulated task bodies — realistic sleep durations
-// ─────────────────────────────────────────────────────────────────────────────
+
+// Simulated task bodies (Realistic sleep durations)
+
 
 fn run_task_body(
     name:    &str,

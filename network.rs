@@ -1,6 +1,6 @@
-// network.rs — OCS ↔ GCS UDP telemetry protocol
-//
-// Packet wire format (27 bytes fixed, no external crates):
+// network.rs (OCS to GCS UDP telemetry protocol)
+
+// Packet wire format (27 bytes fixed)
 //
 //  Offset  Len  Field
 //  ──────  ───  ─────────────────────────────────────────────────────
@@ -18,9 +18,8 @@
 use std::net::UdpSocket;
 use std::time::Instant;
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // Constants
-// ─────────────────────────────────────────────────────────────────────────────
 
 pub const PACKET_SIZE:   usize = 27;
 pub const MAGIC:         [u8; 2] = [0x4F, 0x43]; // "OC"
@@ -34,9 +33,9 @@ pub const FLAG_DEGRADED:      u8 = 0b0000_0001;
 pub const FLAG_SAFETY_ALERT:  u8 = 0b0000_0010;
 pub const FLAG_NAN:           u8 = 0b0000_0100;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// OcsTelemetryPacket — decoded representation used by both sides
-// ─────────────────────────────────────────────────────────────────────────────
+
+// OcsTelemetryPacket (Decoded representation used by both sides)
+
 
 #[derive(Debug, Clone)]
 pub struct OcsTelemetryPacket {
@@ -49,7 +48,7 @@ pub struct OcsTelemetryPacket {
 }
 
 impl OcsTelemetryPacket {
-    /// Encode the packet into 27 bytes ready for UDP transmission.
+    // Encode the packet into 27 bytes for UDP transmission.
     pub fn encode(&self) -> [u8; PACKET_SIZE] {
         let mut buf = [0u8; PACKET_SIZE];
 
@@ -81,15 +80,14 @@ impl OcsTelemetryPacket {
         buf
     }
 
-    /// Decode 27 bytes received over UDP into a packet.
-    /// Returns None if magic bytes are wrong or checksum fails.
+    // Decode 27 bytes received over UDP into a packet.
     pub fn decode(buf: &[u8; PACKET_SIZE]) -> Option<Self> {
         // Magic check
         if buf[0] != MAGIC[0] || buf[1] != MAGIC[1] {
             return None;
         }
 
-        // Checksum check — XOR of bytes 0..26 must equal byte 26
+        // Checksum check (XOR of bytes 0..26 must equal byte 26)
         let expected = buf[0..26].iter().fold(0u8, |acc, &b| acc ^ b);
         if expected != buf[26] {
             return None;
@@ -105,7 +103,7 @@ impl OcsTelemetryPacket {
         Some(Self { sequence, timestamp_us, sensor_id, value, orig_size, flags })
     }
 
-    /// Human-readable sensor name from the ID byte.
+    // Human-readable sensor name from the ID byte.
     pub fn sensor_name(&self) -> &'static str {
         match self.sensor_id {
             SENSOR_THERMAL => "THERMAL",
@@ -121,9 +119,9 @@ impl OcsTelemetryPacket {
     pub fn is_nan(&self)          -> bool { self.flags & FLAG_NAN          != 0 }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// UdpSender — OCS side: wraps a bound UDP socket for fire-and-forget sending
-// ─────────────────────────────────────────────────────────────────────────────
+
+// UdpSender (OCS side: Wraps a bound UDP socket for fire-and-forget sending)
+
 
 pub struct UdpSender {
     socket:   UdpSocket,
@@ -132,12 +130,11 @@ pub struct UdpSender {
 }
 
 impl UdpSender {
-    /// Bind to `bind_addr` and target GCS at `gcs_addr`.
-    /// Example: UdpSender::new("0.0.0.0:9001", "127.0.0.1:9002")
+    // Bind to `bind_addr` and target GCS at `gcs_addr`.
+    // UdpSender::new("0.0.0.0:9001", "127.0.0.1:9002")
     pub fn new(bind_addr: &str, gcs_addr: &str) -> std::io::Result<Self> {
         let socket = UdpSocket::bind(bind_addr)?;
         // Non-blocking: if GCS is not listening, send() fails silently
-        // rather than blocking the downlink thread.
         socket.set_nonblocking(true)?;
         println!("[NET][INIT] UDP sender bound {} → {}", bind_addr, gcs_addr);
         Ok(Self {
@@ -147,8 +144,8 @@ impl UdpSender {
         })
     }
 
-    /// Send a telemetry packet to the GCS.
-    /// Errors are logged but never propagate — fire and forget.
+    // Send a telemetry packet to the GCS.
+    // Errors are logged but never propagate (fire and forget)
     pub fn send(&self, pkt: &OcsTelemetryPacket) {
         let buf = pkt.encode();
         match self.socket.send_to(&buf, &self.gcs_addr) {
@@ -157,7 +154,7 @@ impl UdpSender {
         }
     }
 
-    /// Elapsed microseconds since the sender was created (used for timestamps).
+    // Elapsed microseconds since the sender was created (used for timestamps)
     pub fn elapsed_us(&self) -> u64 {
         self.start.elapsed().as_micros() as u64
     }
