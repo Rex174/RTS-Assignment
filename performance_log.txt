@@ -1,0 +1,81 @@
+┌────────────────────────────────────────────────────────────┐
+│         TASK 1 & 2  —  SENSOR / SCHEDULER REPORT          │
+└────────────────────────────────────────────────────────────┘
+Simulation duration  : 300.2s
+Thermal jitter (avg) : 0.020ms  (target: <1ms)
+Safety alerts        : 16
+Data loss events     : 10980
+
+— Sensor Performance Under Fault ——————————————————————————
+THERMAL – cycles=30001 dropped=0 alerts=16
+  Drift   : mean=0.032ms  max=49.931ms  σ=0.858ms
+  Jitter  : mean=0.020ms  max=20.681ms  σ=0.419ms
+  Latency : mean=0.003ms  max=0.057ms 
+
+POWER – cycles=38270 dropped=0 alerts=0
+  Drift   : mean=0.000ms  max=0.000ms  σ=0.000ms
+  Jitter  : mean=42.161ms  max=43.866ms  σ=0.827ms
+  Latency : mean=0.003ms  max=0.135ms 
+
+PAYLOAD – cycles=38132 dropped=10980 alerts=0
+  Drift   : mean=0.000ms  max=0.000ms  σ=0.000ms
+  Jitter  : mean=92.133ms  max=93.706ms  σ=0.832ms
+  Latency : mean=0.003ms  max=0.133ms 
+
+
+— Scheduler Deadline Adherence —————————————————————————————
+Total jobs scheduled : 89274
+Deadline violations  : 0
+Deadline adherence   : 100.0%
+
+— CPU Utilisation ———————————————————————————————————————————
+Active (scheduler)   : 2.44%
+Idle                 : 97.56%
+
+┌────────────────────────────────────────────────────────────┐
+│              TASK 3  —  DOWNLINK METRICS REPORT            │
+└────────────────────────────────────────────────────────────┘
+Protocol        : UDP (alerts/status)
+TCP address      : 0.0.0.0:9000 (Reserved for GCS command uplink)
+UDP address      : 0.0.0.0:9001 → 127.0.0.1:9002
+GCS connected   : ✓ 
+Visibility rule : data within 30ms of window open
+Degraded thresh : 80% buffer fill
+Total packets sent  : 95423
+Queue latency (avg) : 54.742ms  max=121.670ms
+30ms windows met    : 1
+30ms windows missed : 1747
+Degraded mode entries: 2
+
+┌────────────────────────────────────────────────────────────┐
+│         TASK 4  —  BENCHMARKING & FAULT SIMULATION         │
+└────────────────────────────────────────────────────────────┘
+— Benchmarking Summary ————————————————————————————————————————
+Thermal jitter (avg)   : 0.020ms  (target: <1ms)  ✓
+Scheduling drift (avg) : 0.032ms  (Thermal max: 49.931ms)
+Deadline adherence     : 100.0%  (0 violations / 89274 jobs)
+CPU utilisation        : 2.44% active / 97.56% idle
+Fault recovery (avg)   : 40.2ms  (limit: 200ms)  ✓
+
+— Fault Injection Summary ———————————————————————————————————
+Total faults injected : 8
+Recovery deadline     : 200ms
+Mission aborted       : ✓ NO
+
+Fault #1 | DELAYED_SENSOR       | sensor=THERMAL  | RECOVERED in 50ms ✓
+Fault #2 | CORRUPTED_DATA       | sensor=THERMAL  | RECOVERED in 30ms ✓
+Fault #3 | DELAYED_SENSOR       | sensor=THERMAL  | RECOVERED in 50ms ✓
+Fault #4 | CORRUPTED_DATA       | sensor=THERMAL  | RECOVERED in 30ms ✓
+Fault #5 | DELAYED_SENSOR       | sensor=THERMAL  | RECOVERED in 50ms ✓
+Fault #6 | CORRUPTED_DATA       | sensor=THERMAL  | RECOVERED in 30ms ✓
+Fault #7 | DELAYED_SENSOR       | sensor=THERMAL  | RECOVERED in 50ms ✓
+Fault #8 | CORRUPTED_DATA       | sensor=THERMAL  | RECOVERED in 30ms ✓
+
+— Fault Recovery Time Analysis ——————————————————————————————
+Recovery time — avg=40.2ms  min=30ms  max=50ms
+Within 200ms limit : 8/8 (100%)
+
+— Overall System Verdict ————————————————————————————————————
+⚠ MISSION STATUS: NOMINAL (with deadline warnings)
+Fault log written to: fault_log.txt
+─────────────────────────────────────────────────────────────
